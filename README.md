@@ -12,10 +12,19 @@ Task Manager Pro é uma aplicação desktop para gerenciamento de tarefas que pe
 
 ## ✨ Funcionalidades
 
-- ✅ **Adicionar Tarefas** - Crie novas tarefas com descrição personalizada
-- ✏️ **Editar Tarefas** - Modifique a descrição de tarefas existentes
+- ✅ **Adicionar Tarefas** - Crie novas tarefas com descrição, observação, prioridade, categoria e data de vencimento
+- ✏️ **Editar Tarefas** - Modifique todos os campos de tarefas existentes
 - ❌ **Remover Tarefas** - Exclua tarefas com confirmação de segurança
 - 📋 **Listar Tarefas** - Visualize todas as suas tarefas em uma lista organizada
+- ✓ **Marcar/Desmarcar Concluídas** - Alterne o status de conclusão das tarefas facilmente
+- 🔍 **Filtrar Tarefas** - Visualize todas, apenas pendentes ou apenas concluídas
+- ⚡ **Prioridades** - Defina prioridades (Baixa, Média, Alta) para suas tarefas
+- 🏷️ **Categorias/Tags** - Organize tarefas por categorias personalizadas
+- 📅 **Data de Vencimento** - Adicione prazos às suas tarefas
+- 💭 **Observações** - Adicione notas detalhadas que podem ser editadas ao clicar na tarefa
+- 📊 **Exportar CSV/JSON** - Exporte suas tarefas para outros formatos
+- 🌓 **Tema Claro/Escuro** - Alterne entre temas para melhor conforto visual
+- ⌨️ **Atalhos de Teclado** - Navegue e execute ações rapidamente
 - 💾 **Persistência de Dados** - As tarefas são salvas automaticamente em arquivo binário
 - 🎨 **Interface Moderna** - Design limpo e profissional com cores vibrantes
 
@@ -51,16 +60,24 @@ TodoApp/
 1. **Tarefa.java** - Record imutável que representa uma tarefa
    - `descricao`: String com a descrição da tarefa
    - `concluida`: Boolean indicando se está concluída
+   - `observacao`: String com observações detalhadas
+   - `prioridade`: Enum (BAIXA, MEDIA, ALTA)
+   - `categoria`: String com a categoria da tarefa
+   - `dataVencimento`: LocalDate com a data de vencimento
 
 2. **TarefaService.java** - Camada de serviço
    - Gerencia a lista de tarefas
    - Implementa operações CRUD (Create, Read, Update, Delete)
+   - Filtragem de tarefas (todas, pendentes, concluídas)
+   - Exportação para CSV e JSON
    - Responsável pela persistência em arquivo binário
 
 3. **TodoApp.java** - Interface gráfica
    - Janela principal (JFrame)
    - Componentes Swing customizados
    - Event handlers para interação do usuário
+   - Sistema de temas (claro/escuro)
+   - Atalhos de teclado para maior produtividade
 
 ## 📦 Como Executar
 
@@ -97,13 +114,22 @@ cd TodoApp && javac -d out/production/TodoApp src/*.java && java -cp out/product
 
 A interface foi desenvolvida com foco em usabilidade e design moderno:
 
-- **Header** - Cabeçalho azul com título em destaque
-- **Lista Central** - Área scrollável para visualizar todas as tarefas
-- **Botões de Ação** - Grid 2x2 com botões coloridos:
-  - 🟢 Verde: Adicionar
-  - 🟠 Laranja: Editar
-  - 🔴 Vermelho: Remover
-  - 🔵 Azul: Atualizar
+- **Header** - Cabeçalho azul com título em destaque e filtros
+- **Filtros** - ComboBox para filtrar tarefas (Todas, Pendentes, Concluídas)
+- **Lista Central** - Área scrollável para visualizar tarefas com prioridades e categorias
+- **Botões de Ação** - Grid 2x3 com botões coloridos:
+  - 🟢 Verde: Adicionar Nova Tarefa
+  - 🟠 Laranja: Editar Tarefa Selecionada
+  - 🔴 Vermelho: Remover Tarefa
+  - 🔵 Azul: Marcar/Desmarcar como Concluída
+  - 🟣 Rosa: Ver Detalhes e Observações
+  - ⚫ Cinza: Atualizar Lista
+- **Botões de Exportação** - Exportar tarefas para CSV ou JSON
+- **Interações**:
+  - Clique duplo em uma tarefa para ver detalhes
+  - Espaço para marcar/desmarcar conclusão
+  - Enter para ver detalhes
+  - Atalhos de teclado para todas as ações principais
 
 ### Paleta de Cores
 
@@ -117,10 +143,17 @@ A interface foi desenvolvida com foco em usabilidade e design moderno:
 
 ### Records (Java 14+)
 ```java
-public record Tarefa(String descricao, boolean concluida) implements Serializable {
-    @Override
-    public String toString() {
-        return (concluida ? "[X] " : "[ ] ") + descricao;
+public record Tarefa(
+    String descricao, 
+    boolean concluida,
+    String observacao,
+    Prioridade prioridade,
+    String categoria,
+    LocalDate dataVencimento
+) implements Serializable {
+    // Construtor para compatibilidade retroativa
+    public Tarefa(String descricao, boolean concluida) {
+        this(descricao, concluida, "", Prioridade.MEDIA, "Geral", null);
     }
 }
 ```
@@ -180,16 +213,64 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - GitHub: [@rafaeldiasgarcia](https://github.com/rafaeldiasgarcia)
 - Repositório: [TodoApp](https://github.com/rafaeldiasgarcia/TodoApp)
 
-## 🎯 Melhorias Futuras
+## ⌨️ Atalhos de Teclado
 
-- [ ] Marcar/desmarcar tarefas como concluídas
-- [ ] Filtrar tarefas (todas, pendentes, concluídas)
-- [ ] Adicionar prioridades às tarefas
-- [ ] Implementar categorias/tags
-- [ ] Adicionar data de vencimento
-- [ ] Exportar tarefas para CSV/JSON
-- [ ] Tema claro/escuro
-- [ ] Atalhos de teclado
+Navegue e execute ações rapidamente usando atalhos:
+
+| Atalho | Ação |
+|--------|------|
+| `Ctrl+N` | Nova tarefa |
+| `Ctrl+E` | Editar tarefa selecionada |
+| `Delete` | Remover tarefa selecionada |
+| `Space` | Marcar/desmarcar como concluída |
+| `Enter` | Ver detalhes e observações |
+| `Ctrl+R` | Atualizar lista |
+| `Ctrl+T` | Alternar tema claro/escuro |
+
+## 💭 Como Usar Observações
+
+As observações são notas detalhadas que você pode adicionar às suas tarefas:
+
+1. **Ao criar uma tarefa**: Preencha o campo "Observação" no diálogo de nova tarefa
+2. **Ao editar uma tarefa**: Edite o campo de observação junto com outros campos
+3. **Visualizar observações**: 
+   - Clique duas vezes na tarefa, ou
+   - Selecione a tarefa e pressione `Enter`, ou
+   - Clique no botão "📋 Detalhes"
+4. **Editar somente a observação**: No diálogo de detalhes, clique em "✏️ Editar Observação"
+
+## 📊 Exportação de Dados
+
+Exporte suas tarefas para uso em outras aplicações:
+
+- **CSV**: Formato compatível com Excel, Google Sheets e outros
+- **JSON**: Formato estruturado para integração com outras aplicações
+
+Os arquivos exportados incluem todos os campos: descrição, status, observação, prioridade, categoria e data de vencimento.
+
+## 🎯 Melhorias Implementadas
+
+- [X] Marcar/desmarcar tarefas como concluídas ✅
+- [X] Filtrar tarefas (todas, pendentes, concluídas) ✅
+- [X] Adicionar prioridades às tarefas ✅
+- [X] Implementar categorias/tags ✅
+- [X] Adicionar data de vencimento ✅
+- [X] Adicionar observações às tarefas ✅
+- [X] Editar observações separadamente ✅
+- [X] Exportar tarefas para CSV/JSON ✅
+- [X] Tema claro/escuro ✅
+- [X] Atalhos de teclado ✅
+- [X] Visualização detalhada de tarefas ✅
+
+## 🎯 Próximas Melhorias
+
+- [ ] Notificações de tarefas próximas ao vencimento
+- [ ] Busca e pesquisa de tarefas
+- [ ] Estatísticas e gráficos de produtividade
+- [ ] Subtarefas e checklist
+- [ ] Sincronização com nuvem
+- [ ] Anexos de arquivos
+- [ ] Histórico de alterações
 
 ---
 

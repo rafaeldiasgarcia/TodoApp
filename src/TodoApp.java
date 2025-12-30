@@ -1,20 +1,19 @@
 import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
+import java.awt.event.*;
+import java.time.LocalDate;
 import java.util.List;
+import java.io.File;
 
 public class TodoApp extends JFrame {
     private final TarefaService service = new TarefaService();
+    private final TemaManager tema = new TemaManager();
+    private final ComponenteFactory factory = new ComponenteFactory(tema);
+    
     private DefaultListModel<String> listModel;
     private JList<String> taskList;
-    
-    private static final Color PRIMARY_COLOR = new Color(99, 102, 241);
-    private static final Color SECONDARY_COLOR = new Color(236, 72, 153);
-    private static final Color BG_COLOR = new Color(249, 250, 251);
-    private static final Color CARD_BG = Color.WHITE;
-    private static final Color TEXT_COLOR = new Color(31, 41, 55);
-    private static final Color SUCCESS_COLOR = new Color(16, 185, 129);
-    private static final Color DANGER_COLOR = new Color(239, 68, 68);
+    private TarefaService.FiltroTarefa filtroAtual = TarefaService.FiltroTarefa.TODAS;
 
     public static void main(String[] args) {
         try {
@@ -27,16 +26,18 @@ public class TodoApp extends JFrame {
     public TodoApp() {
         configurarJanela();
         inicializarComponentes();
+        configurarAtalhosTeclado();
         atualizarLista();
     }
 
     private void configurarJanela() {
         setTitle("Task Manager Pro - Java 21");
-        setSize(600, 750);
+        setSize(700, 850);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
-        setResizable(false);
-        getContentPane().setBackground(BG_COLOR);
+        setResizable(true);
+        setMinimumSize(new Dimension(600, 700));
+        getContentPane().setBackground(tema.getBackground());
     }
 
     private void inicializarComponentes() {
@@ -47,17 +48,73 @@ public class TodoApp extends JFrame {
         add(criarPainelBotoes(), BorderLayout.SOUTH);
     }
 
+    private void configurarAtalhosTeclado() {
+        // Ctrl+N - Nova tarefa
+        KeyStroke ctrlN = KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_DOWN_MASK);
+        getRootPane().registerKeyboardAction(e -> adicionar(), ctrlN, JComponent.WHEN_IN_FOCUSED_WINDOW);
+        
+        // Ctrl+E - Editar tarefa
+        KeyStroke ctrlE = KeyStroke.getKeyStroke(KeyEvent.VK_E, InputEvent.CTRL_DOWN_MASK);
+        getRootPane().registerKeyboardAction(e -> editar(), ctrlE, JComponent.WHEN_IN_FOCUSED_WINDOW);
+        
+        // Delete - Remover tarefa
+        KeyStroke delete = KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0);
+        getRootPane().registerKeyboardAction(e -> remover(), delete, JComponent.WHEN_IN_FOCUSED_WINDOW);
+        
+        // Ctrl+R - Atualizar
+        KeyStroke ctrlR = KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK);
+        getRootPane().registerKeyboardAction(e -> atualizarLista(), ctrlR, JComponent.WHEN_IN_FOCUSED_WINDOW);
+        
+        // Espaço - Marcar/desmarcar como concluída
+        KeyStroke space = KeyStroke.getKeyStroke(KeyEvent.VK_SPACE, 0);
+        getRootPane().registerKeyboardAction(e -> marcarConcluida(), space, JComponent.WHEN_IN_FOCUSED_WINDOW);
+        
+        // Enter - Ver detalhes
+        KeyStroke enter = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0);
+        getRootPane().registerKeyboardAction(e -> verDetalhes(), enter, JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
+
     private JPanel criarHeader() {
         JPanel header = new JPanel();
-        header.setBackground(PRIMARY_COLOR);
-        header.setPreferredSize(new Dimension(600, 80));
-        header.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 20));
+        header.setBackground(tema.getPrimary());
+        header.setPreferredSize(new Dimension(700, 100));
+        header.setLayout(new BorderLayout());
 
+        // Título
+        JPanel tituloPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        tituloPanel.setBackground(tema.getPrimary());
         JLabel titulo = new JLabel("TASK MANAGER PRO");
         titulo.setFont(new Font("Segoe UI", Font.BOLD, 28));
         titulo.setForeground(Color.WHITE);
+        tituloPanel.add(titulo);
         
-        header.add(titulo);
+        // Painel de filtros
+        JPanel filtrosPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        filtrosPanel.setBackground(tema.getPrimary());
+        
+        JLabel labelFiltro = new JLabel("Filtro:");
+        labelFiltro.setForeground(Color.WHITE);
+        labelFiltro.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        
+        JComboBox<String> comboFiltro = new JComboBox<>(new String[]{"Todas", "Pendentes", "Concluidas"});
+        comboFiltro.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        comboFiltro.setPreferredSize(new Dimension(150, 30));
+        comboFiltro.addActionListener(e -> {
+            int index = comboFiltro.getSelectedIndex();
+            filtroAtual = switch (index) {
+                case 1 -> TarefaService.FiltroTarefa.PENDENTES;
+                case 2 -> TarefaService.FiltroTarefa.CONCLUIDAS;
+                default -> TarefaService.FiltroTarefa.TODAS;
+            };
+            atualizarLista();
+        });
+        
+        filtrosPanel.add(labelFiltro);
+        filtrosPanel.add(comboFiltro);
+        
+        header.add(tituloPanel, BorderLayout.CENTER);
+        header.add(filtrosPanel, BorderLayout.SOUTH);
+        
         return header;
     }
 
@@ -65,112 +122,126 @@ public class TodoApp extends JFrame {
         listModel = new DefaultListModel<>();
         taskList = new JList<>(listModel);
         
-        taskList.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        taskList.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        taskList.setBackground(CARD_BG);
-        taskList.setFixedCellHeight(50);
+        taskList.setBackground(tema.getCardBackground());
+        taskList.setForeground(tema.getText());
+        taskList.setFixedCellHeight(45);
         taskList.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        // Duplo clique para ver detalhes
+        taskList.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    verDetalhes();
+                }
+            }
+        });
         
         JScrollPane scrollPane = new JScrollPane(taskList);
         scrollPane.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createEmptyBorder(20, 20, 20, 20),
-            BorderFactory.createLineBorder(new Color(229, 231, 235), 2, true)
+            BorderFactory.createLineBorder(tema.getBorder(), 2, true)
         ));
-        scrollPane.getViewport().setBackground(CARD_BG);
+        scrollPane.getViewport().setBackground(tema.getCardBackground());
         
         return scrollPane;
     }
 
     private JPanel criarPainelBotoes() {
-        JPanel painel = new JPanel();
-        painel.setBackground(BG_COLOR);
-        painel.setLayout(new GridLayout(2, 2, 15, 15));
-        painel.setBorder(BorderFactory.createEmptyBorder(20, 40, 30, 40));
+        JPanel painelPrincipal = new JPanel(new BorderLayout());
+        painelPrincipal.setBackground(tema.getBackground());
+        
+        // Painel de botões principais
+        JPanel painelBotoes = new JPanel();
+        painelBotoes.setBackground(tema.getBackground());
+        painelBotoes.setLayout(new GridLayout(2, 3, 15, 15));
+        painelBotoes.setBorder(BorderFactory.createEmptyBorder(10, 40, 10, 40));
 
-        JButton btnAdicionar = criarBotao("+ Adicionar", SUCCESS_COLOR);
-        JButton btnEditar = criarBotao("Editar", new Color(245, 158, 11));
-        JButton btnRemover = criarBotao("X Remover", DANGER_COLOR);
-        JButton btnAtualizar = criarBotao("Atualizar", PRIMARY_COLOR);
+        JButton btnAdicionar = factory.criarBotao("+ Adicionar (Ctrl+N)", tema.getSuccess());
+        JButton btnEditar = factory.criarBotao("Editar (Ctrl+E)", tema.getWarning());
+        JButton btnRemover = factory.criarBotao("Remover (Del)", tema.getDanger());
+        JButton btnConcluir = factory.criarBotao("Concluir (Space)", tema.getPrimary());
+        JButton btnDetalhes = factory.criarBotao("Detalhes (Enter)", tema.getSecondary());
+        JButton btnAtualizar = factory.criarBotao("Atualizar (Ctrl+R)", tema.getInfo());
 
         btnAdicionar.addActionListener(e -> adicionar());
         btnEditar.addActionListener(e -> editar());
         btnRemover.addActionListener(e -> remover());
+        btnConcluir.addActionListener(e -> marcarConcluida());
+        btnDetalhes.addActionListener(e -> verDetalhes());
         btnAtualizar.addActionListener(e -> atualizarLista());
 
-        painel.add(btnAdicionar);
-        painel.add(btnEditar);
-        painel.add(btnRemover);
-        painel.add(btnAtualizar);
-
-        return painel;
-    }
-
-    private JButton criarBotao(String texto, Color cor) {
-        JButton btn = new JButton(texto);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(cor);
-        btn.setFocusPainted(false);
-        btn.setBorderPainted(false);
-        btn.setPreferredSize(new Dimension(200, 50));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        painelBotoes.add(btnAdicionar);
+        painelBotoes.add(btnEditar);
+        painelBotoes.add(btnRemover);
+        painelBotoes.add(btnConcluir);
+        painelBotoes.add(btnDetalhes);
+        painelBotoes.add(btnAtualizar);
         
-        btn.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                btn.setBackground(cor.darker());
-            }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                btn.setBackground(cor);
-            }
-        });
+        // Painel de exportação
+        JPanel painelExportar = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 5));
+        painelExportar.setBackground(tema.getBackground());
         
-        return btn;
+        JButton btnExportarCSV = factory.criarBotaoPequeno("Exportar CSV", new Color(34, 197, 94));
+        JButton btnExportarJSON = factory.criarBotaoPequeno("Exportar JSON", new Color(59, 130, 246));
+        
+        btnExportarCSV.addActionListener(e -> exportar("CSV"));
+        btnExportarJSON.addActionListener(e -> exportar("JSON"));
+        
+        painelExportar.add(btnExportarCSV);
+        painelExportar.add(btnExportarJSON);
+
+        painelPrincipal.add(painelBotoes, BorderLayout.CENTER);
+        painelPrincipal.add(painelExportar, BorderLayout.SOUTH);
+        painelPrincipal.setBorder(BorderFactory.createEmptyBorder(10, 0, 20, 0));
+        
+        return painelPrincipal;
     }
 
     private void atualizarLista() {
         listModel.clear();
-        List<Tarefa> tarefas = service.getTarefas();
+        List<Tarefa> tarefas = service.getTarefasFiltradas(filtroAtual);
         
         if (tarefas.isEmpty()) {
-            listModel.addElement("   Nenhuma tarefa cadastrada. Adicione uma nova!");
+            String mensagem = switch (filtroAtual) {
+                case PENDENTES -> "   Nenhuma tarefa pendente!";
+                case CONCLUIDAS -> "   Nenhuma tarefa concluida ainda.";
+                default -> "   Nenhuma tarefa cadastrada. Adicione uma nova!";
+            };
+            listModel.addElement(mensagem);
         } else {
-            for (int i = 0; i < tarefas.size(); i++) {
-                listModel.addElement("   " + (i + 1) + ".  " + tarefas.get(i).toString());
+            List<Tarefa> todasTarefas = service.getTarefas();
+            for (Tarefa t : tarefas) {
+                int indiceOriginal = todasTarefas.indexOf(t);
+                listModel.addElement("   " + (indiceOriginal + 1) + ".  " + t.toString() + "  " + t.prioridade());
             }
         }
     }
 
     private void adicionar() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JLabel label = new JLabel("Digite a descrição da tarefa:");
-        label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        
-        JTextField textField = new JTextField(20);
-        textField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        textField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(209, 213, 219), 2),
-            BorderFactory.createEmptyBorder(5, 10, 5, 10)
-        ));
-        
-        panel.add(label, BorderLayout.NORTH);
-        panel.add(textField, BorderLayout.CENTER);
+        DialogoTarefa dialogo = new DialogoTarefa(tema, service.getCategorias(), null);
         
         int result = JOptionPane.showConfirmDialog(
             this, 
-            panel, 
+            dialogo.getPanel(), 
             "Nova Tarefa",
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE
         );
         
         if (result == JOptionPane.OK_OPTION) {
-            String desc = textField.getText().trim();
+            String desc = dialogo.getDescricao();
             if (!desc.isBlank()) {
-                service.adicionar(desc);
-                atualizarLista();
-                mostrarMensagem("Tarefa adicionada com sucesso!", "Sucesso", SUCCESS_COLOR);
+                try {
+                    LocalDate dataVencimento = dialogo.getDataVencimento();
+                    service.adicionar(desc, dialogo.getObservacao(), dialogo.getPrioridade(), 
+                                    dialogo.getCategoria(), dataVencimento);
+                    atualizarLista();
+                    factory.mostrarMensagem(this, "Tarefa adicionada com sucesso!", "Sucesso", tema.getSuccess());
+                } catch (Exception ex) {
+                    factory.mostrarMensagem(this, "Data invalida! Use o formato dd/mm/aaaa", "Erro", tema.getDanger());
+                }
             }
         }
     }
@@ -179,49 +250,44 @@ public class TodoApp extends JFrame {
         List<Tarefa> tarefas = service.getTarefas();
         
         if (tarefas.isEmpty()) {
-            mostrarMensagem("Nao ha tarefas para editar.", "Aviso", PRIMARY_COLOR);
+            factory.mostrarMensagem(this, "Nao ha tarefas para editar.", "Aviso", tema.getPrimary());
             return;
         }
         
         int selectedIndex = taskList.getSelectedIndex();
         
         if (selectedIndex == -1) {
-            mostrarMensagem("Selecione uma tarefa na lista para editar.", "Aviso", PRIMARY_COLOR);
+            factory.mostrarMensagem(this, "Selecione uma tarefa na lista para editar.", "Aviso", tema.getPrimary());
             return;
         }
         
-        Tarefa tarefaAtual = tarefas.get(selectedIndex);
+        // Obter o índice real da tarefa
+        String item = listModel.getElementAt(selectedIndex);
+        int indiceReal = Integer.parseInt(item.trim().split("\\.")[0].trim()) - 1;
         
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JLabel label = new JLabel("Edite a descricao da tarefa:");
-        label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        
-        JTextField textField = new JTextField(tarefaAtual.descricao());
-        textField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        textField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(209, 213, 219), 2),
-            BorderFactory.createEmptyBorder(5, 10, 5, 10)
-        ));
-        
-        panel.add(label, BorderLayout.NORTH);
-        panel.add(textField, BorderLayout.CENTER);
+        Tarefa tarefaAtual = tarefas.get(indiceReal);
+        DialogoTarefa dialogo = new DialogoTarefa(tema, service.getCategorias(), tarefaAtual);
         
         int result = JOptionPane.showConfirmDialog(
             this, 
-            panel, 
+            dialogo.getPanel(), 
             "Editar Tarefa",
             JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE
         );
         
         if (result == JOptionPane.OK_OPTION) {
-            String novaDesc = textField.getText().trim();
+            String novaDesc = dialogo.getDescricao();
             if (!novaDesc.isBlank()) {
-                service.editar(selectedIndex, novaDesc);
-                atualizarLista();
-                mostrarMensagem("Tarefa editada com sucesso!", "Sucesso", new Color(245, 158, 11));
+                try {
+                    LocalDate novaDataVencimento = dialogo.getDataVencimento();
+                    service.editar(indiceReal, novaDesc, dialogo.getObservacao(), 
+                                 dialogo.getPrioridade(), dialogo.getCategoria(), novaDataVencimento);
+                    atualizarLista();
+                    factory.mostrarMensagem(this, "Tarefa editada com sucesso!", "Sucesso", tema.getWarning());
+                } catch (Exception ex) {
+                    factory.mostrarMensagem(this, "Data invalida! Use o formato dd/mm/aaaa", "Erro", tema.getDanger());
+                }
             }
         }
     }
@@ -230,42 +296,177 @@ public class TodoApp extends JFrame {
         List<Tarefa> tarefas = service.getTarefas();
         
         if (tarefas.isEmpty()) {
-            mostrarMensagem("Nao ha tarefas para remover.", "Aviso", PRIMARY_COLOR);
+            factory.mostrarMensagem(this, "Nao ha tarefas para remover.", "Aviso", tema.getPrimary());
             return;
         }
         
         int selectedIndex = taskList.getSelectedIndex();
         
         if (selectedIndex == -1) {
-            mostrarMensagem("Selecione uma tarefa na lista para remover.", "Aviso", PRIMARY_COLOR);
+            factory.mostrarMensagem(this, "Selecione uma tarefa na lista para remover.", "Aviso", tema.getPrimary());
             return;
         }
         
+        // Obter o índice real da tarefa
+        String item = listModel.getElementAt(selectedIndex);
+        int indiceReal = Integer.parseInt(item.trim().split("\\.")[0].trim()) - 1;
+        
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            "Tem certeza que deseja remover esta tarefa?\n\n" + tarefas.get(selectedIndex).toString(),
-            "Confirmar Remoção",
+            "Tem certeza que deseja remover esta tarefa?\n\n" + tarefas.get(indiceReal).toString(),
+            "Confirmar Remocao",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.QUESTION_MESSAGE
         );
         
         if (confirm == JOptionPane.YES_OPTION) {
-            service.remover(selectedIndex);
+            service.remover(indiceReal);
             atualizarLista();
-            mostrarMensagem("Tarefa removida com sucesso!", "Sucesso", DANGER_COLOR);
+            factory.mostrarMensagem(this, "Tarefa removida com sucesso!", "Sucesso", tema.getDanger());
         }
     }
 
-    private void mostrarMensagem(String mensagem, String titulo, Color cor) {
-        JLabel label = new JLabel("<html><div style='padding:10px;'>" + mensagem + "</div></html>");
-        label.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        label.setForeground(TEXT_COLOR);
+    private void marcarConcluida() {
+        List<Tarefa> tarefas = service.getTarefas();
         
-        JOptionPane.showMessageDialog(
+        if (tarefas.isEmpty()) {
+            factory.mostrarMensagem(this, "Nao ha tarefas para marcar.", "Aviso", tema.getPrimary());
+            return;
+        }
+        
+        int selectedIndex = taskList.getSelectedIndex();
+        
+        if (selectedIndex == -1) {
+            factory.mostrarMensagem(this, "Selecione uma tarefa na lista.", "Aviso", tema.getPrimary());
+            return;
+        }
+        
+        // Obter o índice real da tarefa
+        String item = listModel.getElementAt(selectedIndex);
+        int indiceReal = Integer.parseInt(item.trim().split("\\.")[0].trim()) - 1;
+        
+        service.alternarConclusao(indiceReal);
+        atualizarLista();
+        
+        Tarefa tarefa = service.getTarefas().get(indiceReal);
+        if (tarefa.concluida()) {
+            factory.mostrarMensagem(this, "Tarefa marcada como concluida!", "Sucesso", tema.getSuccess());
+        } else {
+            factory.mostrarMensagem(this, "Tarefa marcada como pendente!", "Sucesso", tema.getPrimary());
+        }
+    }
+
+    private void verDetalhes() {
+        List<Tarefa> tarefas = service.getTarefas();
+        
+        if (tarefas.isEmpty()) {
+            factory.mostrarMensagem(this, "Nao ha tarefas para visualizar.", "Aviso", tema.getPrimary());
+            return;
+        }
+        
+        int selectedIndex = taskList.getSelectedIndex();
+        
+        if (selectedIndex == -1) {
+            factory.mostrarMensagem(this, "Selecione uma tarefa na lista para ver detalhes.", "Aviso", tema.getPrimary());
+            return;
+        }
+        
+        // Obter o índice real da tarefa
+        String item = listModel.getElementAt(selectedIndex);
+        int indiceReal = Integer.parseInt(item.trim().split("\\.")[0].trim()) - 1;
+        
+        Tarefa tarefa = tarefas.get(indiceReal);
+        
+        // Criar painel de detalhes
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        panel.setBackground(tema.getCardBackground());
+        
+        JTextArea textArea = new JTextArea(tarefa.toDetailedString());
+        textArea.setEditable(false);
+        textArea.setFont(new Font("Consolas", Font.PLAIN, 13));
+        textArea.setBackground(tema.getCardBackground());
+        textArea.setForeground(tema.getText());
+        textArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        panel.add(new JScrollPane(textArea), BorderLayout.CENTER);
+        
+        String[] opcoes = {"Editar Observacao", "Fechar"};
+        int result = JOptionPane.showOptionDialog(
             this,
-            label,
-            titulo,
+            panel,
+            "Detalhes da Tarefa",
+            JOptionPane.DEFAULT_OPTION,
+            JOptionPane.PLAIN_MESSAGE,
+            null,
+            opcoes,
+            opcoes[1]
+        );
+        
+        if (result == 0) {
+            editarObservacao(indiceReal, tarefa);
+        }
+    }
+
+    private void editarObservacao(int indiceReal, Tarefa tarefa) {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        panel.setBackground(tema.getCardBackground());
+        
+        JLabel label = factory.criarLabel("Edite a observacao da tarefa:", 14, Font.BOLD);
+        
+        JTextArea textArea = factory.criarTextArea(tarefa.observacao(), 5, 30);
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(scrollPane, BorderLayout.CENTER);
+        
+        int result = JOptionPane.showConfirmDialog(
+            this,
+            panel,
+            "Editar Observacao",
+            JOptionPane.OK_CANCEL_OPTION,
             JOptionPane.PLAIN_MESSAGE
         );
+        
+        if (result == JOptionPane.OK_OPTION) {
+            String novaObs = textArea.getText().trim();
+            service.editarObservacao(indiceReal, novaObs);
+            atualizarLista();
+            factory.mostrarMensagem(this, "Observacao editada com sucesso!", "Sucesso", tema.getPrimary());
+        }
     }
+
+    private void exportar(String formato) {
+        List<Tarefa> tarefas = service.getTarefas();
+        
+        if (tarefas.isEmpty()) {
+            factory.mostrarMensagem(this, "Nao ha tarefas para exportar.", "Aviso", tema.getPrimary());
+            return;
+        }
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Salvar arquivo " + formato);
+        
+        String extensao = formato.toLowerCase();
+        fileChooser.setSelectedFile(new File("tarefas." + extensao));
+        
+        int result = fileChooser.showSaveDialog(this);
+        
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File arquivo = fileChooser.getSelectedFile();
+            try {
+                if (formato.equals("CSV")) {
+                    service.exportarParaCSV(arquivo.toPath());
+                } else {
+                    service.exportarParaJSON(arquivo.toPath());
+                }
+                factory.mostrarMensagem(this, "Tarefas exportadas com sucesso para:\n" + arquivo.getAbsolutePath(), 
+                               "Sucesso", tema.getSuccess());
+            } catch (Exception ex) {
+                factory.mostrarMensagem(this, "Erro ao exportar: " + ex.getMessage(), "Erro", tema.getDanger());
+            }
+        }
+    }
+
 }
